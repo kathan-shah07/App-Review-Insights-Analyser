@@ -46,13 +46,13 @@ class TestThemeSummarizer:
         with patch('layer_3_content_generation.theme_summarizer.LLMClient'):
             summarizer = ThemeSummarizer()
             
-            # Create 50 reviews
+            # Create 90 reviews (to test chunking with chunk size 30)
             reviews = [
                 {
                     "review_id": f"review_{i}",
                     "text": f"This is review number {i} with enough characters to pass validation" * 2
                 }
-                for i in range(50)
+                for i in range(90)
             ]
             
             # Mock the chunk summarization
@@ -65,14 +65,14 @@ class TestThemeSummarizer:
                 
                 result = summarizer.summarize_theme("Test Theme", reviews)
                 
-                # Should be called 3 times (50 / 20 = 3 chunks, with last chunk having 10)
+                # Should be called 3 times (90 / 30 = 3 chunks)
                 assert mock_chunk.call_count == 3
                 
                 # Check chunk sizes
                 call_args_list = mock_chunk.call_args_list
-                assert len(call_args_list[0][0][1]) == 20  # First chunk: 20 reviews
-                assert len(call_args_list[1][0][1]) == 20  # Second chunk: 20 reviews
-                assert len(call_args_list[2][0][1]) == 10  # Third chunk: 10 reviews
+                assert len(call_args_list[0][0][1]) == 30  # First chunk: 30 reviews
+                assert len(call_args_list[1][0][1]) == 30  # Second chunk: 30 reviews
+                assert len(call_args_list[2][0][1]) == 30  # Third chunk: 30 reviews
     
     def test_parse_summarization_response(self):
         """Test parsing LLM response"""
@@ -116,7 +116,7 @@ class TestThemeSummarizer:
     
     def test_reviews_per_chunk_constant(self):
         """Test that REVIEWS_PER_CHUNK is set correctly"""
-        assert REVIEWS_PER_CHUNK == 20
+        assert REVIEWS_PER_CHUNK == 30
         assert isinstance(REVIEWS_PER_CHUNK, int)
     
     def test_deduplication(self):

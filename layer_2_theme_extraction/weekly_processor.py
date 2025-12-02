@@ -261,4 +261,3 @@ class WeeklyThemeProcessor:
         logger.info(f"{'='*60}")
         
         return results
-

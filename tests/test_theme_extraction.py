@@ -105,13 +105,13 @@ class TestReviewClassifier:
         with patch('layer_2_theme_extraction.classifier.LLMClient'):
             classifier = ReviewClassifier()
             
-            # Create 75 reviews
+            # Create 250 reviews (to test batching with batch size 100)
             reviews = [
                 {
                     "review_id": f"review_{i}",
                     "text": f"This is review number {i} with enough characters to pass validation" * 2
                 }
-                for i in range(75)
+                for i in range(250)
             ]
             
             # Mock the LLM client
@@ -122,7 +122,7 @@ class TestReviewClassifier:
                     "chosen_theme": "Trading Experience",
                     "short_reason": "Test reason"
                 }
-                for i in range(30)  # Mock response for first batch
+                for i in range(100)  # Mock response for first batch
             ])
             classifier.llm_client = mock_llm
             
@@ -134,13 +134,13 @@ class TestReviewClassifier:
                         "chosen_theme": "Trading Experience",
                         "short_reason": "Test reason"
                     }
-                    for i in range(30)
+                    for i in range(100)
                 ]
                 
                 # This will test the batching logic
                 result = classifier.classify_batch(reviews, "test_batch")
                 
-                # Should be called 3 times (75 reviews / 30 = 3 batches)
+                # Should be called 3 times (250 reviews / 100 = 3 batches, with last batch having 50)
                 assert mock_retry.call_count == 3
     
     def test_short_review_filtering(self):
@@ -306,6 +306,7 @@ class TestWeeklyThemeProcessor:
             
             with patch('layer_2_theme_extraction.weekly_processor.settings') as mock_settings:
                 mock_settings.THEMES_DIR = temp_themes_dir
+                mock_settings.MAX_REVIEWS_PER_WEEK = 0  # Set to 0 to disable limit
                 
                 processor = WeeklyThemeProcessor(storage=storage)
                 
@@ -399,7 +400,7 @@ class TestBatchingAndRetry:
     
     def test_reviews_per_batch_constant(self):
         """Test that REVIEWS_PER_BATCH is set correctly"""
-        assert REVIEWS_PER_BATCH == 30
+        assert REVIEWS_PER_BATCH == 100
         assert isinstance(REVIEWS_PER_BATCH, int)
     
     def test_batch_splitting(self):
@@ -407,32 +408,32 @@ class TestBatchingAndRetry:
         with patch('layer_2_theme_extraction.classifier.LLMClient'):
             classifier = ReviewClassifier()
             
-            # Create 75 reviews
+            # Create 250 reviews (to test batching with batch size 100)
             reviews = [
                 {
                     "review_id": f"review_{i}",
                     "text": f"This is review {i} with enough characters" * 3
                 }
-                for i in range(75)
+                for i in range(250)
             ]
             
             # Mock the retry method
             with patch.object(classifier, '_classify_batch_with_retry') as mock_retry:
                 mock_retry.return_value = [
                     {"review_id": f"review_{i}", "chosen_theme": "Trading Experience", "short_reason": "Test"}
-                    for i in range(30)
+                    for i in range(100)
                 ]
                 
                 result = classifier.classify_batch(reviews, "test")
                 
-                # Should be called 3 times (75 / 30 = 3 batches)
+                # Should be called 3 times (250 / 100 = 3 batches, with last batch having 50)
                 assert mock_retry.call_count == 3
                 
                 # Check batch sizes
                 call_args_list = mock_retry.call_args_list
-                assert len(call_args_list[0][0][0]) == 30  # First batch: 30 reviews
-                assert len(call_args_list[1][0][0]) == 30  # Second batch: 30 reviews
-                assert len(call_args_list[2][0][0]) == 15  # Third batch: 15 reviews
+                assert len(call_args_list[0][0][0]) == 100  # First batch: 100 reviews
+                assert len(call_args_list[1][0][0]) == 100  # Second batch: 100 reviews
+                assert len(call_args_list[2][0][0]) == 50   # Third batch: 50 reviews
 
 
 def run_all_tests():
