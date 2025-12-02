@@ -6,6 +6,7 @@ Monitor statistics for each layer and manage weekly pulses.
 import streamlit as st
 import json
 import os
+import time
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 import pandas as pd
@@ -15,6 +16,9 @@ import plotly.graph_objects as go
 from config.settings import settings
 from layer_4_distribution.generate_email import EmailGenerator
 from layer_4_distribution.email_sender import EmailSender
+from layer_1_data_import.import_reviews import import_reviews
+from layer_2_theme_extraction.classify_reviews import classify_all_reviews
+from layer_3_content_generation.generate_pulse import generate_all_pulses
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -212,18 +216,218 @@ def pulse_to_markdown(pulse_data: Dict[str, Any], week_start: str, week_end: str
     return md
 
 
+def check_if_first_run() -> bool:
+    """Check if this is the first run (no data exists)"""
+    pulses_dir = os.path.join(settings.DATA_DIR, "pulses")
+    if not os.path.exists(pulses_dir):
+        return True
+    
+    pulse_files = [
+        f for f in os.listdir(pulses_dir)
+        if f.startswith('pulse_') and f.endswith('.json')
+    ]
+    return len(pulse_files) == 0
+
+
+def run_pipeline_with_progress():
+    """Run the full pipeline with progress tracking"""
+    # Create a placeholder for progress bar
+    progress_placeholder = st.empty()
+    status_placeholder = st.empty()
+    
+    results = {
+        "layer1": {"success": False, "reviews_count": 0, "error": None},
+        "layer2": {"success": False, "weeks_processed": 0, "error": None},
+        "layer3": {"success": False, "pulses_generated": 0, "error": None},
+        "layer4": {"success": False, "emails_generated": 0, "error": None}
+    }
+    
+    try:
+        # Layer 1: Import Reviews
+        with status_placeholder.container():
+            progress_placeholder.progress(0, text="🔵 **Layer 1: Importing Reviews** (0%)")
+            with st.status("🔵 **Layer 1: Importing Reviews** - Fetching reviews from App Store and Play Store...", expanded=True) as status:
+                st.write("📥 Fetching reviews from stores...")
+                st.write("🔍 Validating and filtering reviews...")
+                st.write("💾 Storing reviews by week...")
+                
+                try:
+                    reviews = import_reviews()
+                    results["layer1"]["success"] = True
+                    results["layer1"]["reviews_count"] = len(reviews)
+                    status.update(label="✅ **Layer 1 Complete** - Reviews imported successfully", state="complete")
+                    st.success(f"✅ Imported {len(reviews)} reviews")
+                except Exception as e:
+                    results["layer1"]["error"] = str(e)
+                    status.update(label="❌ **Layer 1 Failed**", state="error")
+                    st.error(f"Error: {str(e)}")
+                    return results
+        
+        progress_placeholder.progress(0.25, text="🟢 **Layer 2: Theme Extraction** (25%)")
+        
+        # Layer 2: Theme Classification
+        with status_placeholder.container():
+            with st.status("🟢 **Layer 2: Theme Extraction** - Classifying reviews into themes...", expanded=True) as status:
+                st.write("🤖 Using AI to classify reviews...")
+                st.write("📊 Grouping reviews by theme...")
+                st.write("⏳ This may take a few minutes...")
+                
+                try:
+                    theme_results = classify_all_reviews()
+                    results["layer2"]["success"] = True
+                    results["layer2"]["weeks_processed"] = len(theme_results)
+                    status.update(label="✅ **Layer 2 Complete** - Themes extracted successfully", state="complete")
+                    st.success(f"✅ Processed {len(theme_results)} weeks")
+                except Exception as e:
+                    results["layer2"]["error"] = str(e)
+                    status.update(label="❌ **Layer 2 Failed**", state="error")
+                    st.error(f"Error: {str(e)}")
+                    return results
+        
+        progress_placeholder.progress(0.50, text="🟡 **Layer 3: Content Generation** (50%)")
+        
+        # Layer 3: Pulse Generation
+        with status_placeholder.container():
+            with st.status("🟡 **Layer 3: Content Generation** - Generating weekly summaries...", expanded=True) as status:
+                st.write("📝 Summarizing themes...")
+                st.write("✍️ Creating pulse documents...")
+                st.write("🎯 Extracting quotes and action items...")
+                
+                try:
+                    pulse_results = generate_all_pulses()
+                    successful_pulses = len([r for r in pulse_results if 'error' not in r])
+                    results["layer3"]["success"] = True
+                    results["layer3"]["pulses_generated"] = successful_pulses
+                    status.update(label="✅ **Layer 3 Complete** - Pulses generated successfully", state="complete")
+                    st.success(f"✅ Generated {successful_pulses} pulses")
+                except Exception as e:
+                    results["layer3"]["error"] = str(e)
+                    status.update(label="❌ **Layer 3 Failed**", state="error")
+                    st.error(f"Error: {str(e)}")
+                    return results
+        
+        progress_placeholder.progress(0.75, text="🔴 **Layer 4: Distribution** (75%)")
+        
+        # Layer 4: Email Generation
+        with status_placeholder.container():
+            with st.status("🔴 **Layer 4: Distribution** - Generating email templates...", expanded=True) as status:
+                st.write("📧 Drafting email content...")
+                st.write("🔒 Checking for PII...")
+                st.write("💾 Saving email templates...")
+                
+                try:
+                    from layer_4_distribution.generate_email import generate_and_send_all_emails
+                    email_results = generate_and_send_all_emails(send=False)
+                    successful_emails = len([r for r in email_results if r.get('success')])
+                    results["layer4"]["success"] = True
+                    results["layer4"]["emails_generated"] = successful_emails
+                    status.update(label="✅ **Layer 4 Complete** - Emails generated successfully", state="complete")
+                    st.success(f"✅ Generated {successful_emails} email templates")
+                except Exception as e:
+                    results["layer4"]["error"] = str(e)
+                    status.update(label="❌ **Layer 4 Failed**", state="error")
+                    st.error(f"Error: {str(e)}")
+                    return results
+        
+        progress_placeholder.progress(1.0, text="✅ **Pipeline Complete** (100%)")
+        
+        # Success message
+        st.balloons()
+        st.success("🎉 **Pipeline completed successfully!**")
+        
+        # Clear placeholders after a moment
+        time.sleep(2)
+        progress_placeholder.empty()
+        status_placeholder.empty()
+        
+    except Exception as e:
+        st.error(f"❌ Pipeline failed with error: {str(e)}")
+        logger.error(f"Pipeline error: {e}", exc_info=True)
+        progress_placeholder.empty()
+        status_placeholder.empty()
+    
+    return results
+
+
 def main():
     """Main Streamlit app"""
     
     # Header
     st.markdown('<h1 class="main-header">📊 App Review Insights Dashboard</h1>', unsafe_allow_html=True)
     
+    # Check if first run
+    is_first_run = check_if_first_run()
+    
+    # Pipeline execution section
+    if is_first_run:
+        st.warning("""
+        🚀 **First Time Setup Detected**
+        
+        No data found in the system. Click the **"Run Full Pipeline"** button in the sidebar to:
+        1. Import reviews from App Store and Play Store
+        2. Classify reviews into themes
+        3. Generate weekly summaries
+        4. Create email templates
+        
+        This process may take several minutes depending on the number of reviews.
+        """)
+    
+    # Pipeline control in sidebar
+    st.sidebar.header("⚙️ Pipeline Control")
+    
+    if st.sidebar.button("🚀 Run Full Pipeline", type="primary", use_container_width=True):
+        st.session_state['run_pipeline'] = True
+    
+    if st.sidebar.button("🔄 Refresh Data", use_container_width=True):
+        st.rerun()
+    
+    st.sidebar.markdown("---")
+    
+    # Show pipeline status if running
+    if st.session_state.get('pipeline_running', False):
+        st.info("⏳ Pipeline is currently running... Please wait.")
+    
+    # Run pipeline if triggered
+    if st.session_state.get('run_pipeline', False):
+        st.session_state['run_pipeline'] = False
+        st.session_state['pipeline_running'] = True
+        
+        # Show pipeline execution
+        st.markdown("---")
+        st.header("🚀 Running Pipeline")
+        st.markdown("The pipeline is processing all 4 layers. This may take several minutes...")
+        
+        results = run_pipeline_with_progress()
+        
+        st.session_state['pipeline_running'] = False
+        
+        # Show summary
+        if all([r.get("success", False) for r in results.values()]):
+            st.markdown("---")
+            st.subheader("📊 Pipeline Summary")
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Layer 1", f"{results['layer1']['reviews_count']} reviews", help="Reviews imported and processed")
+            with col2:
+                st.metric("Layer 2", f"{results['layer2']['weeks_processed']} weeks", help="Weeks with themes extracted")
+            with col3:
+                st.metric("Layer 3", f"{results['layer3']['pulses_generated']} pulses", help="Weekly summaries generated")
+            with col4:
+                st.metric("Layer 4", f"{results['layer4']['emails_generated']} emails", help="Email templates created")
+            
+            st.info("💡 **Tip:** Use the tabs above to view statistics, preview pulses, and manage emails.")
+        
+        # Auto-refresh after completion
+        time.sleep(3)
+        st.rerun()
+    
     # Sidebar for week selection
     st.sidebar.header("📅 Week Selection")
     available_weeks = get_available_weeks()
     
     if not available_weeks:
-        st.error("No pulse data available. Please run the pipeline first.")
+        if not is_first_run:
+            st.warning("⚠️ No pulse data available. Run the pipeline to generate data.")
         st.stop()
     
     selected_week = st.sidebar.selectbox(
