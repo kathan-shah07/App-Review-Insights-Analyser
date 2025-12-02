@@ -1,0 +1,28 @@
+# LLM & AI
+langchain
+langchain-google-genai
+google-generativeai
+
+# Web Scraping
+google-play-scraper
+app-store-scraper-mod
+requests
+beautifulsoup4
+
+# Data Processing & Clustering
+numpy
+pandas
+chromadb
+hdbscan
+scikit-learn
+
+# Email
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
+
+# Utilities
+python-dotenv
+pydantic
+schedule
+langdetect
