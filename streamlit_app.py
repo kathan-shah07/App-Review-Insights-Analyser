@@ -378,9 +378,9 @@ def main():
     if st.sidebar.button("🚀 Run Full Pipeline", type="primary", use_container_width=True):
         st.session_state['run_pipeline'] = True
     
-    if st.sidebar.button("🔄 Refresh Data", use_container_width=True):
-        st.rerun()
-    
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("**📅 Scheduled Runs:**")
+    st.sidebar.markdown("Pipeline runs automatically every Monday at 9:00 AM (configured in `scheduler.py`)")
     st.sidebar.markdown("---")
     
     # Show pipeline status if running
@@ -415,11 +415,9 @@ def main():
             with col4:
                 st.metric("Layer 4", f"{results['layer4']['emails_generated']} emails", help="Email templates created")
             
+            st.success("✅ Pipeline completed successfully! Data is now available in the dashboard.")
             st.info("💡 **Tip:** Use the tabs above to view statistics, preview pulses, and manage emails.")
-        
-        # Auto-refresh after completion
-        time.sleep(3)
-        st.rerun()
+            st.info("📅 **Note:** The pipeline will run automatically on the next scheduled time (Monday). Use the 'Run Full Pipeline' button to run manually anytime.")
     
     # Sidebar for week selection
     st.sidebar.header("📅 Week Selection")
