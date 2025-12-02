@@ -22,7 +22,7 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-def generate_all_pulses() -> List[Dict[str, Any]]:
+def generate_all_pulses(force_regenerate: bool = False) -> List[Dict[str, Any]]:
     """
     Generate pulses for all available weeks - Main function
     
@@ -36,12 +36,19 @@ def generate_all_pulses() -> List[Dict[str, Any]]:
        - 3 Quotes: Real quotes from users that represent the themes
        - 3 Action Items: Specific things the team should do
     
+    Args:
+        force_regenerate: If True, regenerate even if pulses already exist
+    
     Returns:
         List of pulse data dictionaries - one for each week
     """
     logger.info("=" * 80)
     logger.info("Starting Weekly Pulse Generation Workflow")
     logger.info("=" * 80)
+    if force_regenerate:
+        logger.info("Force regenerate: YES - will regenerate all pulses")
+    else:
+        logger.info("Force regenerate: NO - will skip weeks that already have pulses")
     
     # Find where we stored the theme files
     themes_dir = settings.THEMES_DIR
@@ -83,7 +90,7 @@ def generate_all_pulses() -> List[Dict[str, Any]]:
             
             # Generate the pulse (summary) for this week
             # This uses AI to read all the themes and create a concise summary
-            pulse_data = generator.generate_pulse(week_key, theme_data)
+            pulse_data = generator.generate_pulse(week_key, theme_data, force_regenerate=force_regenerate)
             results.append(pulse_data)
             
         except Exception as e:
@@ -94,12 +101,18 @@ def generate_all_pulses() -> List[Dict[str, Any]]:
                 "error": str(e)
             })
     
-    # Count how many were successful
+    # Count how many were successful and how many were skipped
     successful = len([r for r in results if 'error' not in r])
+    skipped = len([r for r in results if r.get('skipped', False)])
+    newly_generated = successful - skipped
+    
     logger.info(f"\n{'=' * 80}")
     logger.info(f"Pulse Generation Summary")
     logger.info(f"{'=' * 80}")
     logger.info(f"Processed: {successful}/{len(theme_files)} weeks successfully")
+    if skipped > 0:
+        logger.info(f"  - Newly generated: {newly_generated} pulses")
+        logger.info(f"  - Skipped (already exist): {skipped} pulses")
     logger.info(f"{'=' * 80}")
     
     return results  # Return all the pulses we created

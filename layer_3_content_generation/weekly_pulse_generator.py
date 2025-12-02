@@ -35,17 +35,31 @@ class WeeklyPulseGenerator:
         self.pulses_dir = os.path.join(settings.DATA_DIR, "pulses")
         os.makedirs(self.pulses_dir, exist_ok=True)
     
-    def generate_pulse(self, week_key: str, theme_data: Dict[str, Any]) -> Dict[str, Any]:
+    def generate_pulse(self, week_key: str, theme_data: Dict[str, Any], 
+                       force_regenerate: bool = False) -> Dict[str, Any]:
         """
         Generate weekly pulse for a given week
         
         Args:
             week_key: Week key (YYYY-MM-DD)
             theme_data: Theme data dictionary from layer-2 (contains reviews, theme_counts, top_themes)
+            force_regenerate: If True, regenerate even if pulse already exists
             
         Returns:
             Dictionary with pulse data and metadata
         """
+        # Check if pulse already exists
+        pulse_file = os.path.join(self.pulses_dir, f"pulse_{week_key}.json")
+        if not force_regenerate and os.path.exists(pulse_file):
+            logger.info(f"Pulse already exists for week {week_key}, loading existing...")
+            try:
+                with open(pulse_file, 'r', encoding='utf-8') as f:
+                    existing_pulse = json.load(f)
+                logger.info(f"Loaded existing pulse for week {week_key}")
+                return existing_pulse
+            except Exception as e:
+                logger.warning(f"Error loading existing pulse for week {week_key}, will regenerate: {e}")
+        
         logger.info(f"Generating weekly pulse for week {week_key}")
         
         # Extract week dates

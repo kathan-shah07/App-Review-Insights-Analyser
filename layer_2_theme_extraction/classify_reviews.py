@@ -21,7 +21,7 @@ from datetime import datetime
 logger = get_logger(__name__)
 
 
-def classify_all_reviews() -> list[dict]:
+def classify_all_reviews(force_regenerate: bool = False) -> list[dict]:
     """
     Classify all reviews into themes - This is the main function
     
@@ -39,6 +39,9 @@ def classify_all_reviews() -> list[dict]:
     Why batches of 30? Because AI can process multiple reviews at once,
     which is faster and cheaper than doing them one at a time.
     
+    Args:
+        force_regenerate: If True, regenerate even if themes already exist
+    
     Returns:
         List of processing results for each week - shows how many reviews
         were classified and which themes they belong to
@@ -49,6 +52,10 @@ def classify_all_reviews() -> list[dict]:
     logger.info("=" * 80)
     logger.info(f"Batch size: {REVIEWS_PER_BATCH} reviews per prompt")
     logger.info(f"Strategy: Each week's reviews are batched separately")
+    if force_regenerate:
+        logger.info("Force regenerate: YES - will regenerate all themes")
+    else:
+        logger.info("Force regenerate: NO - will skip weeks that already have themes")
     # Check if there's a limit on how many reviews to process per week
     # (useful for testing - set to 100 to only process first 100 reviews)
     if settings.MAX_REVIEWS_PER_WEEK > 0:
@@ -76,7 +83,7 @@ def classify_all_reviews() -> list[dict]:
     # Create a processor that will do the actual classification
     processor = WeeklyThemeProcessor()
     # Process all weeks - this sends reviews to AI and gets themes back
-    results = processor.process_all_weeks()
+    results = processor.process_all_weeks(force_regenerate=force_regenerate)
     
     # ============================================================
     # Calculate summary statistics
@@ -86,6 +93,7 @@ def classify_all_reviews() -> list[dict]:
     total_reviews = sum(r.get('total_reviews', 0) for r in results if 'total_reviews' in r)
     successful_weeks = len([r for r in results if 'error' not in r])  # Weeks that worked
     failed_weeks = len([r for r in results if 'error' in r])  # Weeks that had errors
+    skipped_weeks = len([r for r in results if r.get('skipped', False)])  # Weeks that were skipped
     
     # Calculate how many batches we processed (for reporting)
     total_batches = 0
@@ -107,6 +115,8 @@ def classify_all_reviews() -> list[dict]:
     logger.info("=" * 80)
     logger.info(f"Processing time: {duration:.2f} seconds ({duration/60:.2f} minutes)")
     logger.info(f"Weeks processed: {successful_weeks}/{len(available_weeks)} successful")
+    if skipped_weeks > 0:
+        logger.info(f"Skipped (already exist): {skipped_weeks} weeks")
     if failed_weeks > 0:
         logger.warning(f"Failed weeks: {failed_weeks}")
     logger.info(f"Total reviews: {total_reviews}")

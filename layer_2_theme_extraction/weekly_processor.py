@@ -31,16 +31,37 @@ class WeeklyThemeProcessor:
         self.themes_dir = settings.THEMES_DIR
         os.makedirs(self.themes_dir, exist_ok=True)
     
-    def process_week(self, week_key: str) -> Dict[str, Any]:
+    def process_week(self, week_key: str, force_regenerate: bool = False) -> Dict[str, Any]:
         """
         Process reviews for a specific week
         
         Args:
             week_key: Week key (YYYY-MM-DD format)
+            force_regenerate: If True, regenerate even if themes already exist
             
         Returns:
             Dictionary with processing results
         """
+        # Check if themes already exist
+        themes_file = os.path.join(self.themes_dir, f"themes_{week_key}.json")
+        if not force_regenerate and os.path.exists(themes_file):
+            logger.info(f"Themes already exist for week {week_key}, skipping regeneration...")
+            try:
+                with open(themes_file, 'r', encoding='utf-8') as f:
+                    existing_data = json.load(f)
+                logger.info(f"Loaded existing themes for week {week_key}")
+                return {
+                    "week_key": week_key,
+                    "total_reviews": existing_data.get("total_reviews", 0),
+                    "classified_reviews": existing_data.get("total_reviews", 0),
+                    "theme_counts": existing_data.get("theme_counts", {}),
+                    "top_themes": existing_data.get("top_themes", []),
+                    "skipped": True,
+                    "message": "Themes already exist, skipped regeneration"
+                }
+            except Exception as e:
+                logger.warning(f"Error loading existing themes for week {week_key}, will regenerate: {e}")
+        
         logger.info(f"Processing themes for week {week_key}")
         
         # Load reviews for the week
@@ -178,7 +199,7 @@ class WeeklyThemeProcessor:
         except Exception as e:
             logger.error(f"Error saving theme assignments to {filename}: {e}", exc_info=True)
     
-    def process_all_weeks(self) -> List[Dict[str, Any]]:
+    def process_all_weeks(self, force_regenerate: bool = False) -> List[Dict[str, Any]]:
         """
         Process all available weeks - each week's reviews are batched and sent in separate prompts
         
@@ -186,6 +207,9 @@ class WeeklyThemeProcessor:
         - Processes each week independently
         - Batches all reviews from a week into a single prompt
         - Processes weeks sequentially
+        
+        Args:
+            force_regenerate: If True, regenerate even if themes already exist
         
         Returns:
             List of processing results for each week
@@ -196,9 +220,15 @@ class WeeklyThemeProcessor:
             logger.info("No weeks available for processing")
             return []
         
+        if force_regenerate:
+            logger.info(f"Force regenerate enabled - will regenerate all themes")
+        else:
+            logger.info(f"Will skip weeks that already have themes (use force_regenerate=True to override)")
+        
         logger.info(f"Processing {len(available_weeks)} weeks (each week batched in separate prompts)")
         
         results = []
+        skipped_count = 0
         for week_key in available_weeks:
             try:
                 logger.info(f"\n{'='*60}")
@@ -206,8 +236,11 @@ class WeeklyThemeProcessor:
                 logger.info(f"{'='*60}")
                 
                 # Process each week independently - each week gets its own prompt
-                result = self.process_week(week_key)
+                result = self.process_week(week_key, force_regenerate=force_regenerate)
                 results.append(result)
+                
+                if result.get("skipped"):
+                    skipped_count += 1
                 
             except Exception as e:
                 logger.error(f"Error processing week {week_key}: {e}", exc_info=True)
@@ -222,6 +255,8 @@ class WeeklyThemeProcessor:
         
         logger.info(f"\n{'='*60}")
         logger.info(f"Processing complete: {successful}/{len(available_weeks)} weeks successful")
+        if skipped_count > 0:
+            logger.info(f"Skipped (already exist): {skipped_count} weeks")
         logger.info(f"Total reviews: {total_reviews}, Classified: {total_classified}")
         logger.info(f"{'='*60}")
         

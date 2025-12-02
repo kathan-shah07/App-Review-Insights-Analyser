@@ -22,7 +22,7 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 # Batch size for reviews per prompt
-REVIEWS_PER_BATCH = 30
+REVIEWS_PER_BATCH = 100
 
 
 class ReviewClassifier:

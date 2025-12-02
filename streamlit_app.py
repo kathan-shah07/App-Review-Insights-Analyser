@@ -266,18 +266,29 @@ def run_pipeline_with_progress():
         progress_placeholder.progress(0.25, text="🟢 **Layer 2: Theme Extraction** (25%)")
         
         # Layer 2: Theme Classification
+        force_regenerate = st.session_state.get('force_regenerate', False)
         with status_placeholder.container():
-            with st.status("🟢 **Layer 2: Theme Extraction** - Classifying reviews into themes...", expanded=True) as status:
+            status_msg = "🟢 **Layer 2: Theme Extraction** - Classifying reviews into themes..."
+            if not force_regenerate:
+                status_msg += " (Skipping existing themes)"
+            with st.status(status_msg, expanded=True) as status:
                 st.write("🤖 Using AI to classify reviews...")
                 st.write("📊 Grouping reviews by theme...")
+                if not force_regenerate:
+                    st.write("ℹ️ Will skip weeks that already have themes")
                 st.write("⏳ This may take a few minutes...")
                 
                 try:
-                    theme_results = classify_all_reviews()
+                    theme_results = classify_all_reviews(force_regenerate=force_regenerate)
                     results["layer2"]["success"] = True
                     results["layer2"]["weeks_processed"] = len(theme_results)
-                    status.update(label="✅ **Layer 2 Complete** - Themes extracted successfully", state="complete")
-                    st.success(f"✅ Processed {len(theme_results)} weeks")
+                    skipped = len([r for r in theme_results if r.get("skipped", False)])
+                    if skipped > 0:
+                        status.update(label=f"✅ **Layer 2 Complete** - Processed {len(theme_results)} weeks ({skipped} skipped)", state="complete")
+                        st.success(f"✅ Processed {len(theme_results)} weeks ({skipped} skipped, {len(theme_results)-skipped} newly classified)")
+                    else:
+                        status.update(label="✅ **Layer 2 Complete** - Themes extracted successfully", state="complete")
+                        st.success(f"✅ Processed {len(theme_results)} weeks")
                 except Exception as e:
                     results["layer2"]["error"] = str(e)
                     status.update(label="❌ **Layer 2 Failed**", state="error")
@@ -288,13 +299,18 @@ def run_pipeline_with_progress():
         
         # Layer 3: Pulse Generation
         with status_placeholder.container():
-            with st.status("🟡 **Layer 3: Content Generation** - Generating weekly summaries...", expanded=True) as status:
+            status_msg = "🟡 **Layer 3: Content Generation** - Generating weekly summaries..."
+            if not force_regenerate:
+                status_msg += " (Skipping existing pulses)"
+            with st.status(status_msg, expanded=True) as status:
                 st.write("📝 Summarizing themes...")
                 st.write("✍️ Creating pulse documents...")
                 st.write("🎯 Extracting quotes and action items...")
+                if not force_regenerate:
+                    st.write("ℹ️ Will skip weeks that already have pulses")
                 
                 try:
-                    pulse_results = generate_all_pulses()
+                    pulse_results = generate_all_pulses(force_regenerate=force_regenerate)
                     successful_pulses = len([r for r in pulse_results if 'error' not in r])
                     results["layer3"]["success"] = True
                     results["layer3"]["pulses_generated"] = successful_pulses
@@ -375,8 +391,16 @@ def main():
     # Pipeline control in sidebar
     st.sidebar.header("⚙️ Pipeline Control")
     
-    if st.sidebar.button("🚀 Run Full Pipeline", type="primary", use_container_width=True):
+    # Force regenerate option
+    force_regenerate = st.sidebar.checkbox(
+        "🔄 Force Regenerate All",
+        value=False,
+        help="If checked, will regenerate all data even if it already exists. Unchecked will skip existing data."
+    )
+    
+    if st.sidebar.button("🚀 Run Full Pipeline", type="primary", width='stretch'):
         st.session_state['run_pipeline'] = True
+        st.session_state['force_regenerate'] = force_regenerate
     
     st.sidebar.markdown("---")
     st.sidebar.markdown("**📅 Scheduled Runs:**")
@@ -508,11 +532,11 @@ def main():
                     color_continuous_scale="Blues"
                 )
                 fig.update_layout(height=400, xaxis_tickangle=-45)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
                 
                 # Theme counts table
                 st.markdown("**Theme Distribution:**")
-                st.dataframe(df_themes, use_container_width=True, hide_index=True)
+                st.dataframe(df_themes, width='stretch', hide_index=True)
         else:
             st.info("No theme data available for this week.")
         
