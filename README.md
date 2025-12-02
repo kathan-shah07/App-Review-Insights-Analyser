@@ -96,6 +96,18 @@ python scheduler.py
 - Pulses: `data/pulses/pulse_YYYY-MM-DD.json`
 - Emails: `data/emails/email_YYYY-MM-DD.json`
 
+## Streamlit Dashboard
+
+**Launch the web dashboard:**
+```bash
+streamlit run streamlit_app.py
+```
+
+The dashboard provides:
+- **Layer Statistics**: Monitor reviews scraped, themes extracted, pulse generation
+- **Pulse Preview**: View weekly summaries and download as Markdown
+- **Email Management**: Generate and send emails with recipient input
+
 ## Configuration
 
 Edit `config/settings.py` or set environment variables:

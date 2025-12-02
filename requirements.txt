@@ -26,3 +26,7 @@ python-dotenv
 pydantic
 schedule
 langdetect
+
+# Frontend
+streamlit
+plotly
