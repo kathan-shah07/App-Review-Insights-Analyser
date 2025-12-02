@@ -2,6 +2,8 @@
 
 Automated pipeline that fetches app reviews, classifies them into themes, generates weekly summaries, and sends email reports.
 
+![Weekly Email Report](Email-weekly-report.jpeg)
+
 ## File Structure
 
 ```
